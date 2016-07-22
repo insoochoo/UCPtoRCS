@@ -2,6 +2,10 @@
  * @brief: RCS API interface implementation using standard socket (not UCP protocol!!!)
  *
  */
+
+#include <stdio.h>
+#include <string.h>
+#include <vector>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -9,17 +13,17 @@
 #include "rcs.h"
 #include "ucp.h"
 
-int rcsSocket() 
+int rcsSocket()
 {
 	return socket(AF_INET, SOCK_STREAM, 0);
 }
 
-int rcsBind(int sockfd, struct sockaddr_in *addr) 
+int rcsBind(int sockfd, struct sockaddr_in *addr)
 {
-	return (mybind(sockfd, addr));
+	return 0;//(mybind(sockfd, addr));
 }
 
-int rcsGetSockName(int sockfd, struct sockaddr_in *addr) 
+int rcsGetSockName(int sockfd, struct sockaddr_in *addr)
 {
 	socklen_t len = (socklen_t)sizeof(struct sockaddr_in);
 	return(getsockname(sockfd, (struct sockaddr *)addr, &len));
@@ -27,7 +31,7 @@ int rcsGetSockName(int sockfd, struct sockaddr_in *addr)
 
 int rcsListen(int sockfd)
 {
-	return listen(sockfd, 0); 
+	return listen(sockfd, 0);
 }
 
 int rcsAccept(int sockfd, struct sockaddr_in *addr)
@@ -54,5 +58,5 @@ int rcsSend(int sockfd, void *buf, int len)
 
 int rcsClose(int sockfd)
 {
-	return close(sockfd); 
+	return close(sockfd);
 }
