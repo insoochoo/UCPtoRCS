@@ -1,0 +1,29 @@
+This folder contain starter files for RCS protocol project
+README:
+	This file.
+Makefile:
+	The makefile.
+
+net_util.h:
+	The network utility function header file.
+	1. mybind()
+	2. getPublicIPAddr()
+net_util.c: 
+	The network utility functions source file.
+
+rcs.h: 
+	The RCS protocol API interface header file
+rcs.c: 
+	An empty implementation of RCS protocol API by using standard socket call instead of the UCP protocol. This is file is for compliling rcsapp targets only. The implementation itself is a typical incorrect implementation!  
+rcs_dummy.c:
+	A dummy implementation of the RCS protocol. This file can be used as a template if one wishes.
+rcsapp-server.c:  
+	A server that writes client stdout input to a file using RCS protocol
+rcsapp-client.c: 
+	A RCS protocol client that sends input from stdout to the rcsapp-server and sleeps randomly between sends.
+tcp-server.c: 
+	A server that writes client stdout input to a file using TCP protocol
+tcp-client.c: 
+	A TCP client that sends input from stdout to th tcp-server and sleeps randomly between sends. 
+
+Last update: 2016/06/18
