@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
     }
 
     while((nread = read(STDIN_FILENO, buf, 256)) > 0) {
-	if(send(s, buf, nread, MSG_NOSIGNAL) < 0) {
+	if(send(s, buf, nread, 0) < 0) {
 	    perror("send"); exit(1);
 	}
 
