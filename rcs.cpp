@@ -1,36 +1,59 @@
 #include <stdio.h>
 #include <string.h>
+#include <sstream>
 #include <vector>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <string>
+#include <stdlib.h>
 
 #include "net_util.h"
 #include "rcs.h"
 #include "ucp.h"
 
-#define SUCCESS 0;
-#define CONNECT 1;
-#define ACKNOWLEDGE 2;
+#define SUCCESS 0
+#define CONNECT 1
+#define ACKNOWLEDGE 2
 
 class Socket {
  public:
   int ucpSockfd;
   sockaddr_in* addr;
   bool listening;
+  int nextPacketId;
 
-  Socket(int ucpSockfd) : ucpSockfd(ucpSockfd), addr(NULL), listening(false) {}
+  Socket(int ucpSockfd) : ucpSockfd(ucpSockfd), addr(NULL), listening(false), nextPacketId(0) {}
 };
 
 std::vector<Socket> sockets; // Move this to rcs.h file
 
 //err handling
-bool isValidSockfd(int sockfd){
+bool isValidSockfd(int sockfd, const char* functionName){
   if (sockfd < 0 || sockfd >= sockets.size()) {
-    printf("Not a valid sockfd");
+    printf("Not a valid sockfd for func: %s\n", functionName);
     return false;
   }
   return true;
+}
+
+// order is either 0 or 1 where 0 gives you string before first token
+// 1 returns string before second token
+std::string parsePacket(char* buf, char token, int order) {
+  for(int i = 0; i < strlen(buf); i++) {
+    if(buf[i] == token) {
+
+      std::string str(buf);
+
+      if(order == 0) {
+        return str.substr(0,i);
+      }
+
+      return str.substr(i,strlen(buf)-1);
+    }
+  }
+
+  return "";
 }
 
 int rcsSocket()
@@ -46,7 +69,9 @@ int rcsSocket()
 
 int rcsBind(int sockfd, struct sockaddr_in *addr)
 {
-  // TODO: err handling
+  if(!isValidSockfd(sockfd, "rcsBind")){
+    return -1;
+  }
 
   sockets[sockfd].addr = addr;
 
@@ -59,14 +84,18 @@ int rcsBind(int sockfd, struct sockaddr_in *addr)
 
 int rcsGetSockName(int sockfd, struct sockaddr_in *addr)
 {
-  // TODO: err handling
+  if(!isValidSockfd(sockfd, "rcsGetSockName")){
+    return -1;
+  }
 
   return ucpGetSockName(sockets[sockfd].ucpSockfd, addr);
 }
 
 int rcsListen(int sockfd)
 {
-  // TODO: err handling
+  if(!isValidSockfd(sockfd, "rcsListen")){
+    return -1;
+  }
 
   sockets[sockfd].listening = true;
   return SUCCESS;
@@ -77,8 +106,11 @@ accepts a connection request on a socket (the first argument).This is a blocking
 */
 int rcsAccept(int sockfd, struct sockaddr_in *addr)
 {
+
+  if(!isValidSockfd(sockfd, "rcsAccept")){
+    return -1;
+  }
   printf("rcsAccept: Accepted\n");
-  // TODO: err handling
 
   // accept a connection request
   int buf[1];
@@ -104,6 +136,10 @@ Connects a client to a server. The socket (first argument) must have been bound 
 */
 int rcsConnect(int sockfd, const struct sockaddr_in *addr)
 {
+  if(!isValidSockfd(sockfd, "rcsConnect")){
+    return -1;
+  }
+
   printf("rcsConnect: Connected\n");
   if (sockfd < 0 || sockfd >= sockets.size()) {
     //  TODO: err handling
@@ -128,10 +164,34 @@ blocks awaiting data on a socket (first argument). Presumably, the socket is one
 int rcsRecv(int sockfd, void *buf, int len)
 {
   // TODO: err handling
+  while(true) {
+    char bufRecv[256];
+    int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, bufRecv, 256, sockets[sockfd].addr);
+    printf("rcsRecv: Receiving:\nbuf: %s\n", (char *)buf);
 
-  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buf, len, sockets[sockfd].addr);
-  printf("rcsRecv: Receiving:\nbuf: %s\n", (char *)buf);
-  return recv;
+    int sentPacketId = atoi(parsePacket(bufRecv, '@', 1).c_str());
+
+    if(sentPacketId != sockets[sockfd].nextPacketId) {
+      continue;
+    }
+
+    int responseBuf[1];
+    responseBuf[0] = ACKNOWLEDGE;
+
+    int send = ucpSendTo(sockets[sockfd].ucpSockfd, responseBuf, 1, sockets[sockfd].addr);
+
+    sockets[sockfd].nextPacketId++;
+
+    std::string str = parsePacket(bufRecv, '@', 0);
+    char * writable = new char[str.size() + 1];
+    std::copy(str.begin(), str.end(), writable);
+    writable[str.size()] = '\0';
+    buf = writable;
+
+    return strlen((char *)buf);
+  }
+
+  return -1;
 }
 
 /*
@@ -139,10 +199,28 @@ blocks sending data. The first argument is a socket descriptor that has been ret
 */
 int rcsSend(int sockfd, void *buf, int len)
 {
-  printf("rcsSend: Sending:\nbuf: %s\n", (char *)buf);
-  int bytes = ucpSendTo(sockets[sockfd].ucpSockfd, buf, len, sockets[sockfd].addr);
+  std::ostringstream newBuf;
+  newBuf << sockets[sockfd].nextPacketId;
+  sockets[sockfd].nextPacketId++;
+  newBuf << "@";
 
-  return bytes;
+  int packetIdLength = newBuf.str().length();
+  newBuf << (char *)buf;
+
+  printf("rcsSend: Sending:\nbuf: %s\n", (char *)buf);
+  int ucpSentBytes = ucpSendTo(sockets[sockfd].ucpSockfd, newBuf.str().c_str(),
+                        len + packetIdLength, sockets[sockfd].addr);
+
+  // check for acknowledgement
+  while (true) {
+    int bufRecv[1];
+    int bytes = ucpRecvFrom(sockets[sockfd].ucpSockfd, bufRecv, 1, sockets[sockfd].addr);
+
+    if (bufRecv[0] == ACKNOWLEDGE) {
+      return ucpSentBytes;
+    }
+  }
+  return -1; // should not reach here
 }
 
 int rcsClose(int sockfd)
