@@ -77,22 +77,23 @@ accepts a connection request on a socket (the first argument).This is a blocking
 */
 int rcsAccept(int sockfd, struct sockaddr_in *addr)
 {
+  printf("rcsAccept: Accepted\n");
   // TODO: err handling
 
   // accept a connection request
-  int* buff;
+  int buf[1];
 
-  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buff, 1, addr);
+  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buf, 1, addr);
 
-  // TODO: handle buff
+  // TODO: handle buf
 
   // create new socket
   int newSockfd = rcsSocket();
   sockets[newSockfd].addr = addr;
 
   // Send to client an acknowledgement message
-  *buff = ACKNOWLEDGE;
-  int send = ucpSendTo(sockets[newSockfd].ucpSockfd, buff, 1, addr);
+  buf[0] = ACKNOWLEDGE;
+  int send = ucpSendTo(sockets[newSockfd].ucpSockfd, buf, 1, addr);
   // TODO: error check on send
 
   return newSockfd;
@@ -103,20 +104,19 @@ Connects a client to a server. The socket (first argument) must have been bound 
 */
 int rcsConnect(int sockfd, const struct sockaddr_in *addr)
 {
+  printf("rcsConnect: Connected\n");
   if (sockfd < 0 || sockfd >= sockets.size()) {
     //  TODO: err handling
-    printf("ERROROROR\n");
   }
 
-  printf("SUp\n");
   // connect client to server
-  int buff[1];
-  buff[0] = CONNECT;
+  int buf[1];
+  buf[0] = CONNECT;
 
-  int send = ucpSendTo(sockets[sockfd].ucpSockfd, buff, 1, addr);
+  int send = ucpSendTo(sockets[sockfd].ucpSockfd, buf, 1, addr);
   // TODO: err handle on send
 
-  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buff, 1, (struct sockaddr_in *)addr);
+  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buf, 1, (struct sockaddr_in *)addr);
   // TODO: err handle on recv
 
   return SUCCESS;
@@ -129,9 +129,9 @@ int rcsRecv(int sockfd, void *buf, int len)
 {
   // TODO: err handling
 
-
-
-  return -1;
+  int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buf, len, sockets[sockfd].addr);
+  printf("rcsRecv: Receiving:\nbuf: %s\n", (char *)buf);
+  return recv;
 }
 
 /*
@@ -139,19 +139,17 @@ blocks sending data. The first argument is a socket descriptor that has been ret
 */
 int rcsSend(int sockfd, void *buf, int len)
 {
-  // TODO: err handling
+  printf("rcsSend: Sending:\nbuf: %s\n", (char *)buf);
+  int bytes = ucpSendTo(sockets[sockfd].ucpSockfd, buf, len, sockets[sockfd].addr);
 
-  printf("buf : %s\n len : %d\n", (char *)buf, len);
-
-  // TODO
-  return -1;
+  return bytes;
 }
 
 int rcsClose(int sockfd)
 {
-  // TODO: err handling
+  int close = ucpClose(sockets[sockfd].ucpSockfd);
+  sockets.erase(sockets.begin() + sockfd);
+  printf("Closed\n");
 
-  // TODO
-  return -1;
+  return close;
 }
-

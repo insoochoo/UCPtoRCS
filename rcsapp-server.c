@@ -22,9 +22,9 @@
 #include "net_util.h"
 #include "rcs.h"
 
-#if 0
+//#if 0
 #define _DEBUG_
-#endif
+//#endif
 
 void *serviceConnection(void *arg) {
 	int s = *(int *)arg;
@@ -49,8 +49,8 @@ void *serviceConnection(void *arg) {
 		}
 #endif
 
-		if(recvlen <= 0) { 
-			// quit 
+		if(recvlen <= 0) {
+			// quit
 #ifdef _DEBUG_
 			printf("%lu exiting, spot 1...\n", pthread_self());
 #endif
