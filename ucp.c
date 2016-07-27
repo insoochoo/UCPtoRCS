@@ -1,4 +1,4 @@
-/* 
+/*
  * Mahesh V. Tripunitara
  * University of Waterloo
  *
@@ -62,7 +62,7 @@ int ucpSetSockRecvTimeout(int sockfd, int milliSecs)
 
 int ucpSendTo(int sockfd, const void *buf, int len, const struct sockaddr_in *to)
 {
-    const int pDoEvil = 10; /* Chance in 100 that we will do evil */
+    const int pDoEvil = 0; /* Chance in 100 that we will do evil */
 
     if(len <= 0) {
 	errno = EINVAL; /* Invalid arg */
@@ -76,7 +76,7 @@ int ucpSendTo(int sockfd, const void *buf, int len, const struct sockaddr_in *to
 	/* What kind of evil? -- 1 of 3 kinds */
 
 	int evilKind = get_rand()%3;
-	    /* evilKind == 0 -- send only part of the bytes 
+	    /* evilKind == 0 -- send only part of the bytes
 	     *             1 -- corrupt some of the bytes
 	     *             2 -- don't send packet
 	     */

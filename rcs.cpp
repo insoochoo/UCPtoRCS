@@ -49,7 +49,7 @@ std::string parsePacket(char* buf, char token, int order) {
         return str.substr(0,i);
       }
 
-      return str.substr(i,strlen(buf)-1);
+      return str.substr(i+1,strlen(buf)-1);
     }
   }
 
@@ -123,6 +123,8 @@ int rcsAccept(int sockfd, struct sockaddr_in *addr)
   int newSockfd = rcsSocket();
   sockets[newSockfd].addr = addr;
 
+  ucpSetSockRecvTimeout(sockets[sockfd].ucpSockfd, 5000);
+
   // Send to client an acknowledgement message
   buf[0] = ACKNOWLEDGE;
   int send = ucpSendTo(sockets[newSockfd].ucpSockfd, buf, 1, addr);
@@ -155,6 +157,8 @@ int rcsConnect(int sockfd, const struct sockaddr_in *addr)
   int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, buf, 1, (struct sockaddr_in *)addr);
   // TODO: err handle on recv
 
+  ucpSetSockRecvTimeout(sockets[sockfd].ucpSockfd, 5000);
+
   return SUCCESS;
 }
 
@@ -164,25 +168,33 @@ blocks awaiting data on a socket (first argument). Presumably, the socket is one
 int rcsRecv(int sockfd, void *buf, int len)
 {
   // TODO: err handling
+
   while(true) {
     char bufRecv[256];
     int recv = ucpRecvFrom(sockets[sockfd].ucpSockfd, bufRecv, 256, sockets[sockfd].addr);
-    printf("rcsRecv: Receiving:\nbuf: %s\n", (char *)buf);
 
-    int sentPacketId = atoi(parsePacket(bufRecv, '@', 1).c_str());
+    printf("rcsRecv: received data %s\n", bufRecv);
+
+    if(recv < 0) {
+      printf("rcsSend: timeout %d, %s\n", recv, bufRecv);
+      continue;
+    }
+
+    int sentPacketId = atoi(parsePacket(bufRecv, '@', 0).c_str());
 
     if(sentPacketId != sockets[sockfd].nextPacketId) {
       continue;
     }
 
-    int responseBuf[1];
-    responseBuf[0] = ACKNOWLEDGE;
+    char responseBuf[1];
+    responseBuf[0] = 'Z';
 
     int send = ucpSendTo(sockets[sockfd].ucpSockfd, responseBuf, 1, sockets[sockfd].addr);
+    printf("rcsRecv: sent acknowledgement %d\n", responseBuf[0]);
 
     sockets[sockfd].nextPacketId++;
 
-    std::string str = parsePacket(bufRecv, '@', 0);
+    std::string str = parsePacket(bufRecv, '@', 1);
     char * writable = new char[str.size() + 1];
     std::copy(str.begin(), str.end(), writable);
     writable[str.size()] = '\0';
@@ -207,17 +219,30 @@ int rcsSend(int sockfd, void *buf, int len)
   int packetIdLength = newBuf.str().length();
   newBuf << (char *)buf;
 
-  printf("rcsSend: Sending:\nbuf: %s\n", (char *)buf);
-  int ucpSentBytes = ucpSendTo(sockets[sockfd].ucpSockfd, newBuf.str().c_str(),
-                        len + packetIdLength, sockets[sockfd].addr);
+  printf("rcsSend: sending data:\nbuf: %s\n", (char *)buf);
+
+  int sendResp = ucpSendTo(sockets[sockfd].ucpSockfd, newBuf.str().c_str(),
+              			   len + packetIdLength, sockets[sockfd].addr);
+  printf("rcsSend: sent data %s\n", newBuf.str().c_str());
 
   // check for acknowledgement
   while (true) {
-    int bufRecv[1];
-    int bytes = ucpRecvFrom(sockets[sockfd].ucpSockfd, bufRecv, 1, sockets[sockfd].addr);
+    char bufRecv[1];
+    int recvResp = ucpRecvFrom(sockets[sockfd].ucpSockfd, bufRecv, 1, sockets[sockfd].addr);
 
-    if (bufRecv[0] == ACKNOWLEDGE) {
-      return ucpSentBytes;
+    printf("rcsSend: received acknowledgement : %c, %d\n", bufRecv[0], recvResp);
+
+    if (recvResp < 0) {
+      printf("rcsSend: timeout %s\n", newBuf.str().c_str());
+      ucpSendTo(sockets[sockfd].ucpSockfd, newBuf.str().c_str(),
+              	len + packetIdLength, sockets[sockfd].addr);
+
+      continue;
+    }
+
+    if (bufRecv[0] == 'Z') {
+      printf("acknowledged\n");
+      return sendResp;
     }
   }
   return -1; // should not reach here
